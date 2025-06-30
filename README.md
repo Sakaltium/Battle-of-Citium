@@ -1,6 +1,7 @@
 # Battle-of-Citium
 https://raw.githubusercontent.com/Konnitiwa768/jsonstorage/main/sakalti.json
 https://chatgpt.com
+https://saus2.github.io/Battle-of-Citium/Idle3.html
 4701
 https://docs.google.com/forms/d/e/1FAIpQLSczgUnpFrSKWMhINRBWfnCd4NYnoUupm9bUdXbK0YKdKYTrKQ/viewform
 4683
