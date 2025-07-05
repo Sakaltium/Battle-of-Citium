@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>完全版フォント作成ツール（パス方向修正版）</title>
+<title>完全版フォント作成ツール（addGlyph修正版）</title>
 <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 <style>
     body { font-family: sans-serif; margin: 20px; }
@@ -25,7 +25,7 @@
 </head>
 <body>
 
-<h1>フォント作成ツール - 完全版（パス方向修正版）</h1>
+<h1>フォント作成ツール - 完全版（addGlyph修正版）</h1>
 
 <canvas id="drawCanvas" width="300" height="300"></canvas><br>
 
@@ -278,7 +278,7 @@ function generateFont() {
             advanceWidth: 600,
             path: path
         });
-        font.addGlyph(glyph);
+        font.glyphs.push(glyph);  // ここを addGlyph() ではなく push() に修正
     }
 
     return font;
@@ -372,8 +372,8 @@ function renderFontSetList() {
     for (const name in allSets) {
         const div = document.createElement('div');
         div.innerHTML = `<b>${name}</b> 
-        <button data-name=\"${name}\" class=\"loadBtn\">読</button> 
-        <button data-name=\"${name}\" class=\"delBtn\">削</button>`;
+        <button data-name="${name}" class="loadBtn">読</button> 
+        <button data-name="${name}" class="delBtn">削</button>`;
         fontSetList.appendChild(div);
     }
 
