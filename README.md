@@ -16,7 +16,7 @@ https://konnitiwa768.github.io/Battle-of-Citium/Benrii.html
 https://saus2.github.io/Battle-of-Citium/Idle3.html
 https://konnitiwa768.github.io/Battle-of-Citium/Tokei.html
 https://konnitiwa768.github.io/Battle-of-Citium/Oyar.html
-https://konnitiwa768.github.io/Battle-of-Citium/Font4.html
+https://konnitiwa768.github.io/Battle-of-Citium/Font5.html
 https://konnitiwa768.github.io/Battle-of-Citium/Teri3.html
 https://konnitiwa768.github.io/Battle-of-Citium/Zp.html
 https://konnitiwa768.github.io/Battle-of-Citium/8.html
