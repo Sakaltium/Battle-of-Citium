@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>ペダル発電・クリスタル採掘ゲーム</title>
 <style>
   body {
@@ -27,14 +27,6 @@
     background: radial-gradient(circle, #444 40%, #222 100%);
     transition: transform 0.5s linear;
   }
-  .rock {
-    width: 100px;
-    height: 100px;
-    background: #555;
-    border: 3px solid #999;
-    margin: 20px auto;
-    border-radius: 10px;
-  }
   .crystal {
     width: 50px;
     height: 50px;
@@ -46,8 +38,15 @@
     justify-content: center;
   }
   button {
+    margin: 5px;
+    padding: 5px 10px;
+  }
+  .shop-item {
     margin: 10px;
     padding: 10px;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 5px;
   }
 </style>
 </head>
@@ -58,20 +57,18 @@
 </div>
 <p>発電量: <span id="power">0</span></p>
 <p>石耐久: <span id="rockHp">100</span></p>
-<p>現在の機械: <span id="machineName">手動掘削機</span></p>
-<p>必要発電量: <span id="requiredPower">10</span></p>
 <p>獲得金: <span id="money">0</span></p>
-<div class="rock" id="rock"></div>
 <p>
   <button id="upgradePedal">ペダル強化 (必要: <span id="pedalCost">10</span>)</button>
-  <button id="upgradeMachine">機械強化 (必要: <span id="machineCost">50</span>)</button>
   <button id="reset">リセット</button>
 </p>
 <h2>クリスタル</h2>
 <div id="crystalContainer"></div>
+<h2>機械ショップ</h2>
+<div id="machineShop"></div>
 
+<!-- 独自Polygonクリスタル16種SVG -->
 <svg style="display:none">
-  <!-- 独自Polygonクリスタル16種 -->
   <symbol id="crys1" viewBox="0 0 100 100"><polygon points="50,0 90,50 50,100 10,50" fill="#0ff"/></symbol>
   <symbol id="crys2" viewBox="0 0 100 100"><polygon points="50,0 85,25 100,75 50,100 0,75 15,25" fill="#f0f"/></symbol>
   <symbol id="crys3" viewBox="0 0 100 100"><polygon points="0,50 50,0 100,50 50,100" fill="#ff0"/></symbol>
@@ -91,31 +88,36 @@
 </svg>
 
 <script>
-let power = 0;
-let money = 0;
-let rockHp = 100;
-let pedalLevel = 1;
-let machineLevel = 1;
-let pedalCost = 10;
-let machineCost = 50;
-let requiredPower = 10;
+let power = parseInt(localStorage.getItem('power')) || 0;
+let money = parseInt(localStorage.getItem('money')) || 0;
+let rockHp = parseInt(localStorage.getItem('rockHp')) || 100;
+let pedalLevel = parseInt(localStorage.getItem('pedalLevel')) || 1;
+let pedalCost = parseInt(localStorage.getItem('pedalCost')) || 10;
+let machines = JSON.parse(localStorage.getItem('machines')) || Array(16).fill(0);
+let machineCosts = JSON.parse(localStorage.getItem('machineCosts')) || Array.from({length:16}, (_,i)=>50*Math.pow(1.15,i));
 
 const machineNames = ["手動掘削機", "簡易ドリル", "電動破砕機", "超振動マシン", "ナノ掘削装置", "反重力採掘機", "量子崩壊装置", "次元穿孔機", "暗黒鉱石粉砕機", "反物質掘削機", "真空採掘機", "時空崩壊機", "惑星砕き", "星系改造機", "銀河破砕装置", "宇宙の終焉"];
-const machinePowers = [1, 3, 6, 12, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200];
-const machineCosts = [50, 100, 200, 500, 1500, 5000, 20000, 80000, 320000, 1500000, 8000000, 50000000, 300000000, 1500000000, 8000000000, 50000000000];
+const machinePowers = [1.5, 3, 6, 12, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200];
 
 const powerDisplay = document.getElementById('power');
 const moneyDisplay = document.getElementById('money');
 const rockHpDisplay = document.getElementById('rockHp');
 const pedal = document.getElementById('pedal');
-const rock = document.getElementById('rock');
 const pedalCostDisplay = document.getElementById('pedalCost');
-const machineCostDisplay = document.getElementById('machineCost');
 const crystalContainer = document.getElementById('crystalContainer');
-const machineNameDisplay = document.getElementById('machineName');
-const requiredPowerDisplay = document.getElementById('requiredPower');
+const machineShop = document.getElementById('machineShop');
 
 let rotating = false;
+
+function save() {
+  localStorage.setItem('power', power);
+  localStorage.setItem('money', money);
+  localStorage.setItem('rockHp', rockHp);
+  localStorage.setItem('pedalLevel', pedalLevel);
+  localStorage.setItem('pedalCost', pedalCost);
+  localStorage.setItem('machines', JSON.stringify(machines));
+  localStorage.setItem('machineCosts', JSON.stringify(machineCosts));
+}
 
 pedal.addEventListener('touchstart', e => {
   e.preventDefault();
@@ -138,26 +140,32 @@ function rotatePedal() {
   }, 500 / pedalLevel);
 }
 
+function totalMachinePower() {
+  return machines.reduce((sum, count, i) => sum + count * machinePowers[i], 0);
+}
+
 function generatePower() {
   power += pedalLevel;
   powerDisplay.textContent = power;
-  if (power >= requiredPower) {
-    power -= requiredPower;
-    requiredPower = Math.floor(requiredPower * 1.15);
-    money += machinePowers[machineLevel - 1];
-    requiredPowerDisplay.textContent = requiredPower;
+
+  if (power >= 10) {
+    const times = Math.floor(power / 10);
+    power -= times * 10;
+    money += times * totalMachinePower();
     moneyDisplay.textContent = money;
-    mineRock();
+    mineRock(times);
   }
+  save();
 }
 
-function mineRock() {
-  rockHp -= machinePowers[machineLevel - 1];
+function mineRock(times) {
+  rockHp -= totalMachinePower() * times;
   if (rockHp <= 0) {
     rockHp = 100;
     getCrystal();
   }
   rockHpDisplay.textContent = rockHp;
+  save();
 }
 
 function getCrystal() {
@@ -169,7 +177,6 @@ function getCrystal() {
   else if (chance < 0.000001) crystalIndex = 12;
   else if (chance < 0.0001) crystalIndex = 11;
   else if (chance < 0.001) crystalIndex = Math.floor(Math.random() * 11);
-
   if (crystalIndex >= 0) {
     const crystal = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     crystal.setAttribute('class', 'crystal');
@@ -179,10 +186,10 @@ function getCrystal() {
     crystal.appendChild(use);
     crystalContainer.appendChild(crystal);
 
-    const bonus = (crystalIndex + 1) * 5;
-    money += bonus;
+    money += (crystalIndex + 1) * 5;
     moneyDisplay.textContent = money;
   }
+  save();
 }
 
 document.getElementById('upgradePedal').addEventListener('click', () => {
@@ -192,39 +199,71 @@ document.getElementById('upgradePedal').addEventListener('click', () => {
     pedalCost = Math.floor(pedalCost * 1.15);
     moneyDisplay.textContent = money;
     pedalCostDisplay.textContent = pedalCost;
-  }
-});
-
-document.getElementById('upgradeMachine').addEventListener('click', () => {
-  if (machineLevel >= 16) return;
-  if (money >= machineCosts[machineLevel - 1]) {
-    money -= machineCosts[machineLevel - 1];
-    machineLevel++;
-    machineNameDisplay.textContent = machineNames[machineLevel - 1];
-    moneyDisplay.textContent = money;
-    machineCostDisplay.textContent = machineCosts[machineLevel - 1] || "MAX";
+    save();
   }
 });
 
 document.getElementById('reset').addEventListener('click', () => {
+  if (!confirm('本当にリセットしますか？')) return;
   power = 0;
   money = 0;
   rockHp = 100;
   pedalLevel = 1;
-  machineLevel = 1;
   pedalCost = 10;
-  machineCost = 50;
-  requiredPower = 10;
+  machines = Array(16).fill(0);
+  machineCosts = Array.from({length:16}, (_,i)=>50*Math.pow(1.15,i));
+  crystalContainer.innerHTML = "";
+  updateDisplay();
+  save();
+});
 
+function updateDisplay() {
   powerDisplay.textContent = power;
   moneyDisplay.textContent = money;
   rockHpDisplay.textContent = rockHp;
   pedalCostDisplay.textContent = pedalCost;
-  machineCostDisplay.textContent = machineCosts[0];
-  requiredPowerDisplay.textContent = requiredPower;
-  machineNameDisplay.textContent = machineNames[0];
-  crystalContainer.innerHTML = "";
+  machineShop.innerHTML = "";
+  machines.forEach((count, i) => {
+    const div = document.createElement('div');
+    div.className = 'shop-item';
+    div.innerHTML = `${machineNames[i]} 所有:${count} <br> コスト:${Math.floor(machineCosts[i])} <br>
+    <button data-idx="${i}">購入</button>
+    <button data-upg="${i}">強化</button>`;
+    machineShop.appendChild(div);
+  });
+}
+
+machineShop.addEventListener('click', e => {
+  const idx = e.target.dataset.idx;
+  const upg = e.target.dataset.upg;
+  if (idx !== undefined) {
+    const i = parseInt(idx);
+    if (money >= machineCosts[i]) {
+      money -= machineCosts[i];
+      machines[i]++;
+      machineCosts[i] = Math.floor(machineCosts[i] * 1.15);
+      moneyDisplay.textContent = money;
+      updateDisplay();
+      save();
+    }
+  } else if (upg !== undefined) {
+    const i = parseInt(upg);
+    if (money >= machineCosts[i]) {
+      money -= machineCosts[i];
+      machinePowers[i] = Math.floor(machinePowers[i] * 1.15);
+      machineCosts[i] = Math.floor(machineCosts[i] * 1.15);
+      moneyDisplay.textContent = money;
+      updateDisplay();
+      save();
+    }
+  }
 });
+
+updateDisplay();
+powerDisplay.textContent = power;
+moneyDisplay.textContent = money;
+rockHpDisplay.textContent = rockHp;
+pedalCostDisplay.textContent = pedalCost;
 </script>
 </body>
 </html>
