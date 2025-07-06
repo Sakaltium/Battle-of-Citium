@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ペダル発電・クリスタル採掘ゲーム</title>
+<style>
+  body {
+    background: #111;
+    color: #fff;
+    text-align: center;
+    font-family: sans-serif;
+  }
+  .pedal-container {
+    margin: 20px auto;
+    width: 150px;
+    height: 150px;
+    position: relative;
+  }
+  .pedal {
+    width: 100%;
+    height: 100%;
+    border: 5px solid #888;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: radial-gradient(circle, #444 40%, #222 100%);
+    transition: transform 0.5s linear;
+  }
+  .rock {
+    width: 100px;
+    height: 100px;
+    background: #555;
+    border: 3px solid #999;
+    margin: 20px auto;
+    border-radius: 10px;
+  }
+  .crystal {
+    width: 50px;
+    height: 50px;
+    margin: 5px;
+  }
+  #crystalContainer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    margin: 10px;
+    padding: 10px;
+  }
+</style>
+</head>
+<body>
+<h1>ペダル発電・クリスタル採掘</h1>
+<div class="pedal-container">
+  <div class="pedal" id="pedal"></div>
+</div>
+<p>発電量: <span id="power">0</span></p>
+<p>石耐久: <span id="rockHp">100</span></p>
+<p>現在の機械: <span id="machineName">手動掘削機</span></p>
+<p>必要発電量: <span id="requiredPower">10</span></p>
+<p>獲得金: <span id="money">0</span></p>
+<div class="rock" id="rock"></div>
+<p>
+  <button id="upgradePedal">ペダル強化 (必要: <span id="pedalCost">10</span>)</button>
+  <button id="upgradeMachine">機械強化 (必要: <span id="machineCost">50</span>)</button>
+  <button id="reset">リセット</button>
+</p>
+<h2>クリスタル</h2>
+<div id="crystalContainer"></div>
+
+<svg style="display:none">
+  <!-- 独自Polygonクリスタル16種 -->
+  <symbol id="crys1" viewBox="0 0 100 100"><polygon points="50,0 90,50 50,100 10,50" fill="#0ff"/></symbol>
+  <symbol id="crys2" viewBox="0 0 100 100"><polygon points="50,0 85,25 100,75 50,100 0,75 15,25" fill="#f0f"/></symbol>
+  <symbol id="crys3" viewBox="0 0 100 100"><polygon points="0,50 50,0 100,50 50,100" fill="#ff0"/></symbol>
+  <symbol id="crys4" viewBox="0 0 100 100"><polygon points="25,0 75,0 100,50 75,100 25,100 0,50" fill="#0f0"/></symbol>
+  <symbol id="crys5" viewBox="0 0 100 100"><polygon points="50,0 90,50 70,100 30,100 10,50" fill="#f00"/></symbol>
+  <symbol id="crys6" viewBox="0 0 100 100"><polygon points="50,0 100,25 80,100 20,100 0,25" fill="#0ff"/></symbol>
+  <symbol id="crys7" viewBox="0 0 100 100"><polygon points="50,0 90,30 70,100 30,100 10,30" fill="#f0f"/></symbol>
+  <symbol id="crys8" viewBox="0 0 100 100"><polygon points="20,0 80,0 100,50 80,100 20,100 0,50" fill="#ff0"/></symbol>
+  <symbol id="crys9" viewBox="0 0 100 100"><polygon points="0,0 100,0 100,100 0,100" fill="#0f0"/></symbol>
+  <symbol id="crys10" viewBox="0 0 100 100"><polygon points="25,0 75,0 100,25 100,75 75,100 25,100 0,75 0,25" fill="#f00"/></symbol>
+  <symbol id="crys11" viewBox="0 0 100 100"><polygon points="50,0 100,100 0,100" fill="#00f"/></symbol>
+  <symbol id="crys12" viewBox="0 0 100 100"><polygon points="10,10 90,10 90,90 10,90" fill="#0ff"/></symbol>
+  <symbol id="crys13" viewBox="0 0 100 100"><polygon points="50,0 100,50 50,100 0,50" fill="#f0f"/></symbol>
+  <symbol id="crys14" viewBox="0 0 100 100"><polygon points="50,0 75,25 100,50 75,75 50,100 25,75 0,50 25,25" fill="#ff0"/></symbol>
+  <symbol id="crys15" viewBox="0 0 100 100"><polygon points="0,0 100,0 100,100 0,100" fill="#f00"/></symbol>
+  <symbol id="crys16" viewBox="0 0 100 100"><polygon points="0,0 100,0 100,100 0,100" fill="#fff"/></symbol>
+</svg>
+
+<script>
+let power = 0;
+let money = 0;
+let rockHp = 100;
+let pedalLevel = 1;
+let machineLevel = 1;
+let pedalCost = 10;
+let machineCost = 50;
+let requiredPower = 10;
+
+const machineNames = ["手動掘削機", "簡易ドリル", "電動破砕機", "超振動マシン", "ナノ掘削装置", "反重力採掘機", "量子崩壊装置", "次元穿孔機", "暗黒鉱石粉砕機", "反物質掘削機", "真空採掘機", "時空崩壊機", "惑星砕き", "星系改造機", "銀河破砕装置", "宇宙の終焉"];
+const machinePowers = [1, 3, 6, 12, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200];
+const machineCosts = [50, 100, 200, 500, 1500, 5000, 20000, 80000, 320000, 1500000, 8000000, 50000000, 300000000, 1500000000, 8000000000, 50000000000];
+
+const powerDisplay = document.getElementById('power');
+const moneyDisplay = document.getElementById('money');
+const rockHpDisplay = document.getElementById('rockHp');
+const pedal = document.getElementById('pedal');
+const rock = document.getElementById('rock');
+const pedalCostDisplay = document.getElementById('pedalCost');
+const machineCostDisplay = document.getElementById('machineCost');
+const crystalContainer = document.getElementById('crystalContainer');
+const machineNameDisplay = document.getElementById('machineName');
+const requiredPowerDisplay = document.getElementById('requiredPower');
+
+let rotating = false;
+
+pedal.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (rotating) return;
+  rotatePedal();
+});
+
+pedal.addEventListener('mousedown', e => {
+  if (rotating) return;
+  rotatePedal();
+});
+
+function rotatePedal() {
+  rotating = true;
+  pedal.style.transform = `rotate(360deg)`;
+  setTimeout(() => {
+    pedal.style.transform = 'rotate(0deg)';
+    generatePower();
+    rotating = false;
+  }, 500 / pedalLevel);
+}
+
+function generatePower() {
+  power += pedalLevel;
+  powerDisplay.textContent = power;
+  if (power >= requiredPower) {
+    power -= requiredPower;
+    requiredPower = Math.floor(requiredPower * 1.15);
+    money += machinePowers[machineLevel - 1];
+    requiredPowerDisplay.textContent = requiredPower;
+    moneyDisplay.textContent = money;
+    mineRock();
+  }
+}
+
+function mineRock() {
+  rockHp -= machinePowers[machineLevel - 1];
+  if (rockHp <= 0) {
+    rockHp = 100;
+    getCrystal();
+  }
+  rockHpDisplay.textContent = rockHp;
+}
+
+function getCrystal() {
+  const chance = Math.random();
+  let crystalIndex = -1;
+  if (chance < 0.000000000000000000001) crystalIndex = 15;
+  else if (chance < 0.0000000001) crystalIndex = 14;
+  else if (chance < 0.00000001) crystalIndex = 13;
+  else if (chance < 0.000001) crystalIndex = 12;
+  else if (chance < 0.0001) crystalIndex = 11;
+  else if (chance < 0.001) crystalIndex = Math.floor(Math.random() * 11);
+
+  if (crystalIndex >= 0) {
+    const crystal = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    crystal.setAttribute('class', 'crystal');
+    crystal.setAttribute('viewBox', '0 0 100 100');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', `#crys${crystalIndex + 1}`);
+    crystal.appendChild(use);
+    crystalContainer.appendChild(crystal);
+
+    const bonus = (crystalIndex + 1) * 5;
+    money += bonus;
+    moneyDisplay.textContent = money;
+  }
+}
+
+document.getElementById('upgradePedal').addEventListener('click', () => {
+  if (money >= pedalCost) {
+    money -= pedalCost;
+    pedalLevel++;
+    pedalCost = Math.floor(pedalCost * 1.15);
+    moneyDisplay.textContent = money;
+    pedalCostDisplay.textContent = pedalCost;
+  }
+});
+
+document.getElementById('upgradeMachine').addEventListener('click', () => {
+  if (machineLevel >= 16) return;
+  if (money >= machineCosts[machineLevel - 1]) {
+    money -= machineCosts[machineLevel - 1];
+    machineLevel++;
+    machineNameDisplay.textContent = machineNames[machineLevel - 1];
+    moneyDisplay.textContent = money;
+    machineCostDisplay.textContent = machineCosts[machineLevel - 1] || "MAX";
+  }
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  power = 0;
+  money = 0;
+  rockHp = 100;
+  pedalLevel = 1;
+  machineLevel = 1;
+  pedalCost = 10;
+  machineCost = 50;
+  requiredPower = 10;
+
+  powerDisplay.textContent = power;
+  moneyDisplay.textContent = money;
+  rockHpDisplay.textContent = rockHp;
+  pedalCostDisplay.textContent = pedalCost;
+  machineCostDisplay.textContent = machineCosts[0];
+  requiredPowerDisplay.textContent = requiredPower;
+  machineNameDisplay.textContent = machineNames[0];
+  crystalContainer.innerHTML = "";
+});
+</script>
+</body>
+</html>
