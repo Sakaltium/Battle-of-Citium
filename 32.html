@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>ペダル発電・クリスタル採掘ゲーム</title>
 <style>
   body {
@@ -26,14 +26,6 @@
     left: 0;
     background: radial-gradient(circle, #444 40%, #222 100%);
     transition: transform 0.5s linear;
-  }
-  .rock {
-    width: 100px;
-    height: 100px;
-    background: #555;
-    border: 3px solid #999;
-    margin: 20px auto;
-    border-radius: 10px;
   }
   .crystal {
     width: 50px;
@@ -74,6 +66,29 @@
 <div id="crystalContainer"></div>
 <h2>機械ショップ</h2>
 <div id="machineShop"></div>
+
+<!-- クリスタルSVG定義（例） -->
+<svg style="display:none;">
+  <defs>
+    <polygon id="crys1" points="50,10 60,40 90,50 60,60 50,90 40,60 10,50 40,40" fill="#00ffff"/>
+    <polygon id="crys2" points="50,15 65,45 85,50 65,55 50,85 35,55 15,50 35,45" fill="#ff00ff"/>
+    <polygon id="crys3" points="50,10 55,40 90,50 55,60 50,90 45,60 10,50 45,40" fill="#ffff00"/>
+    <polygon id="crys4" points="50,20 70,40 90,50 70,60 50,80 30,60 10,50 30,40" fill="#ff6600"/>
+    <polygon id="crys5" points="50,15 65,40 85,50 65,60 50,85 35,60 15,50 35,40" fill="#66ff66"/>
+    <polygon id="crys6" points="50,10 60,45 90,50 60,55 50,90 40,55 10,50 40,45" fill="#6666ff"/>
+    <polygon id="crys7" points="50,10 65,45 85,50 65,55 50,90 35,55 15,50 35,45" fill="#ff6666"/>
+    <polygon id="crys8" points="50,20 70,45 90,50 70,55 50,80 30,55 10,50 30,45" fill="#66ffff"/>
+    <polygon id="crys9" points="50,15 65,45 85,50 65,55 50,85 35,55 15,50 35,45" fill="#cc66ff"/>
+    <polygon id="crys10" points="50,10 60,40 90,50 60,60 50,90 40,60 10,50 40,40" fill="#ffcc00"/>
+    <polygon id="crys11" points="50,20 70,40 90,50 70,60 50,80 30,60 10,50 30,40" fill="#66ccff"/>
+    <polygon id="crys12" points="50,15 65,40 85,50 65,60 50,85 35,60 15,50 35,40" fill="#ff6699"/>
+    <polygon id="crys13" points="50,10 60,45 90,50 60,55 50,90 40,55 10,50 40,45" fill="#99ff66"/>
+    <polygon id="crys14" points="50,10 65,45 85,50 65,55 50,90 35,55 15,50 35,45" fill="#ff9966"/>
+    <polygon id="crys15" points="50,20 70,45 90,50 70,55 50,80 30,55 10,50 30,45" fill="#6699ff"/>
+    <polygon id="crys16" points="50,15 65,40 85,50 65,60 50,85 35,60 15,50 35,40" fill="#ccff66"/>
+  </defs>
+</svg>
+
 <script>
 let power = parseInt(localStorage.getItem('power')) || 0;
 let money = parseInt(localStorage.getItem('money')) || 0;
@@ -84,7 +99,7 @@ let machines = JSON.parse(localStorage.getItem('machines')) || Array(16).fill(0)
 let machineCosts = JSON.parse(localStorage.getItem('machineCosts')) || Array.from({length:16}, (_,i)=>50*Math.pow(1.15,i));
 
 const machineNames = ["手動掘削機", "簡易ドリル", "電動破砕機", "超振動マシン", "ナノ掘削装置", "反重力採掘機", "量子崩壊装置", "次元穿孔機", "暗黒鉱石粉砕機", "反物質掘削機", "真空採掘機", "時空崩壊機", "惑星砕き", "星系改造機", "銀河破砕装置", "宇宙の終焉"];
-const machinePowers = [1, 3, 6, 12, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200];
+const machinePowers = [1.5, 3, 6, 12, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200];
 
 const powerDisplay = document.getElementById('power');
 const moneyDisplay = document.getElementById('money');
@@ -134,17 +149,19 @@ function totalMachinePower() {
 function generatePower() {
   power += pedalLevel;
   powerDisplay.textContent = power;
+
   if (power >= 10) {
-    power -= 10;
-    money += totalMachinePower();
+    const times = Math.floor(power / 10);
+    power -= times * 10;
+    money += times * totalMachinePower();
     moneyDisplay.textContent = money;
-    mineRock();
+    mineRock(times);
   }
   save();
 }
 
-function mineRock() {
-  rockHp -= totalMachinePower();
+function mineRock(times) {
+  rockHp -= totalMachinePower() * times;
   if (rockHp <= 0) {
     rockHp = 100;
     getCrystal();
