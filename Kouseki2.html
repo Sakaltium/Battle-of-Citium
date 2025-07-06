@@ -348,7 +348,7 @@ function toggleAutoClick() {
 function autoClickLoop() {
   if (!autoClick) return;
   addOre();
-  setTimeout(autoClickLoop, 1000);
+  setTimeout(autoClickLoop, 100);
 }
 
 function updateFluidDisplay() {
