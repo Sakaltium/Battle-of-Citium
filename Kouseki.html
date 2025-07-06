@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>永劫鉱界 - アンロック難化版</title>
+<style>
+  body { background: #222; color: #ddd; font-family: sans-serif; text-align: center; padding: 20px; }
+  button { font-size: 16px; padding: 5px 15px; margin: 5px; }
+  .oreItem, .alloyItem, .upgradeItem { margin: 5px 0; }
+  #tank { width: 200px; height: 100px; border: 2px solid #555; margin: 10px auto; background: #333; position: relative; }
+  #fluid { width: 100%; height: 0%; background: cyan; position: absolute; bottom: 0; transition: height 0.3s; }
+</style>
+</head>
+<body>
+
+<h1>永劫鉱界 - アンロック難化版</h1>
+<p><button id="clickStone">永久の石を壊す！</button></p>
+<p><button id="toggleAuto">オートクリック: OFF</button></p>
+<p>破壊回数: <span id="breakCount">0</span></p>
+<p>所持金: <span id="money">0</span></p>
+<p>時空結晶: <span id="crystals">0</span></p>
+
+<h2>製錬炉</h2>
+<div id="tank"><div id="fluid"></div></div>
+<p>溶融量: <span id="fluidAmount">0</span>/100</p>
+<button id="processAlloy">合金生成</button>
+
+<h2>鉱石リスト</h2>
+<div id="oreList"></div>
+
+<h2>合金リスト</h2>
+<div id="alloyList"></div>
+
+<h2>転生アップグレード</h2>
+<div id="upgradeList"></div>
+
+<p><button id="transcend">転生 (必要: 1Qa)</button></p>
+<p><button id="save">セーブ</button> <button id="load">ロード</button></p>
+
+<script>
+// ===== ゲームデータ =====
+let breakCount = 0;
+let money = 0;
+let crystals = 0;
+let fluidAmount = 0;
+let autoClick = false;
+let upgrades = { clickPower: 1, oreValue: 1 };
+
+const ores = [
+    { name: "石英石", unlock: 0, price: 1, color: "#aaa" },
+    { name: "黄鉄鉱", unlock: 10000, price: 5, color: "#ffcc00" },
+    { name: "黒曜石", unlock: 100000, price: 20, color: "#444" },
+    { name: "龍血石", unlock: 1000000, price: 50, color: "red" },
+    { name: "瑠璃石", unlock: 10000000, price: 100, color: "blue" },
+    { name: "幻影鉱", unlock: 100000000, price: 200, color: "purple" },
+    { name: "虚無鉱", unlock: 1000000000, price: 500, color: "black" },
+    { name: "黎明鉱", unlock: 10000000000, price: 1000, color: "#ffeecc" },
+    { name: "深淵鉱", unlock: 100000000000, price: 2000, color: "#002244" },
+    { name: "星屑鉱", unlock: 1e12, price: 5000, color: "#ccf" },
+    { name: "陽炎鉱", unlock: 1e13, price: 10000, color: "orange" },
+    { name: "氷霜鉱", unlock: 1e14, price: 20000, color: "cyan" },
+    { name: "翠晶鉱", unlock: 1e16, price: 50000, color: "green" },
+    { name: "冥界鉱", unlock: 1e17, price: 100000, color: "#880088" },
+    { name: "虚構鉱", unlock: 1e18, price: 200000, color: "#444444" }
+];
+
+const qualities = ["欠陥", "粗悪", "普通", "良質", "極上", "伝説", "神話級"];
+
+const alloys = [
+    "スチール合金", "白金合金", "サーメタル", "アルシディウム",
+    "クラルファイト", "ネグレシオン", "オリハルコン", "アダマンタイト",
+    "マナチウム", "フェリジウム", "エクリシウム", "カオス合金"
+];
+
+const recipes = [
+    { ore: "石英石", quality: "普通", result: "スチール合金" },
+    { ore: "黄鉄鉱", quality: "良質", result: "白金合金" },
+    { ore: "黒曜石", quality: "極上", result: "サーメタル" },
+    { ore: "龍血石", quality: "伝説", result: "アルシディウム" },
+    { ore: "瑠璃石", quality: "神話級", result: "クラルファイト" },
+    { ore: "幻影鉱", quality: "普通", result: "ネグレシオン" },
+    { ore: "虚無鉱", quality: "良質", result: "オリハルコン" },
+    { ore: "黎明鉱", quality: "極上", result: "アダマンタイト" },
+    { ore: "深淵鉱", quality: "伝説", result: "マナチウム" },
+    { ore: "星屑鉱", quality: "神話級", result: "フェリジウム" },
+    { ore: "陽炎鉱", quality: "良質", result: "エクリシウム" },
+    { ore: "氷霜鉱", quality: "極上", result: "カオス合金" }
+];
+
+const upgradeList = [
+    { name: "クリック強化", key: "clickPower", cost: 1, effect: () => upgrades.clickPower++ },
+    { name: "鉱石売却額UP", key: "oreValue", cost: 2, effect: () => upgrades.oreValue++ }
+];
+
+let ownedOres = {};
+let ownedAlloys = {};
+
+// ===== 数字表記 =====
+const prefixes = ["", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"];
+const suffixes = ["", "Vg", "Trig", "Quadrag", "Quinquag", "Sexag", "Septuag", "Octog", "Nonag", "Cent"];
+
+function formatNumber(n) {
+    if (n < 1000) return n.toFixed(2);
+    let unitIndex = 0;
+    while (n >= 1000 && unitIndex < prefixes.length * suffixes.length - 1) {
+        n /= 1000;
+        unitIndex++;
+    }
+    const p = prefixes[unitIndex % prefixes.length];
+    const s = suffixes[Math.floor(unitIndex / prefixes.length)];
+    return n.toFixed(2) + p + s;
+}
+
+// ===== ロジック =====
+function getUnlockedOres() {
+    return ores.filter(o => breakCount >= o.unlock);
+}
+
+function randomOre() {
+    const unlocked = getUnlockedOres();
+    return unlocked[Math.floor(Math.random() * unlocked.length)];
+}
+
+function randomQuality() {
+    return qualities[Math.floor(Math.random() * qualities.length)];
+}
+
+function addOre() {
+    breakCount++;
+    const ore = randomOre();
+    const quality = randomQuality();
+    const key = `${ore.name}（${quality}）`;
+    if (!ownedOres[key]) ownedOres[key] = { count: 0 };
+    ownedOres[key].count += upgrades.clickPower;
+    updateDisplay();
+}
+
+function meltOre(oreName) {
+    if (!ownedOres[oreName] || ownedOres[oreName].count <= 0 || fluidAmount >= 100) return;
+    let amount = 1;
+    if (oreName.includes("良質")) amount = 2;
+    if (oreName.includes("極上")) amount = 3;
+    if (oreName.includes("伝説")) amount = 5;
+    if (oreName.includes("神話級")) amount = 10;
+    ownedOres[oreName].count--;
+    fluidAmount = Math.min(fluidAmount + amount, 100);
+    if (ownedOres[oreName].count <= 0) delete ownedOres[oreName];
+    updateDisplay();
+}
+
+function sellOre(oreName) {
+    if (!ownedOres[oreName] || ownedOres[oreName].count <= 0) return;
+    const baseOre = ores.find(o => oreName.includes(o.name));
+    if (!baseOre) return;
+    let price = ownedOres[oreName].count * baseOre.price * upgrades.oreValue;
+    if (oreName.includes("良質")) price *= 2;
+    if (oreName.includes("極上")) price *= 3;
+    if (oreName.includes("伝説")) price *= 5;
+    if (oreName.includes("神話級")) price *= 10;
+    money += price;
+    delete ownedOres[oreName];
+    updateDisplay();
+}
+
+function processAlloy() {
+    if (fluidAmount < 100) return;
+    for (const recipe of recipes) {
+        const key = `${recipe.ore}（${recipe.quality}）`;
+        if (ownedOres[key] && ownedOres[key].count > 0) {
+            if (!ownedAlloys[recipe.result]) ownedAlloys[recipe.result] = 0;
+            ownedAlloys[recipe.result]++;
+            ownedOres[key].count--;
+            if (ownedOres[key].count <= 0) delete ownedOres[key];
+            fluidAmount = 0;
+            updateDisplay();
+            return;
+        }
+    }
+    alert("合致する鉱石がありません");
+}
+
+function sellAlloy(alloyName) {
+    if (!ownedAlloys[alloyName] || ownedAlloys[alloyName] <= 0) return;
+    money += ownedAlloys[alloyName] * 1000;
+    delete ownedAlloys[alloyName];
+    updateDisplay();
+}
+
+function toggleAutoClick() {
+    autoClick = !autoClick;
+    document.getElementById("toggleAuto").innerText = `オートクリック: ${autoClick ? "ON" : "OFF"}`;
+}
+
+function transcend() {
+    if (money < 1e15) {
+      alert("所持金が不足しています (1Qa 以上必要)");
+      return;
+    }
+    money = 0;
+    ownedOres = {};
+    ownedAlloys = {};
+    fluidAmount = 0;
+    breakCount = 0;
+    crystals++;
+    alert("転生成功！時空結晶を獲得しました！");
+    updateDisplay();
+}
+
+function buyUpgrade(key) {
+    const upg = upgradeList.find(u => u.key === key);
+    if (!upg || crystals < upg.cost) {
+      alert("結晶が不足しています。");
+      return;
+    }
+    crystals -= upg.cost;
+    upg.effect();
+    updateDisplay();
+}
+
+function updateDisplay() {
+    document.getElementById("breakCount").innerText = formatNumber(breakCount);
+    document.getElementById("money").innerText = formatNumber(money);
+    document.getElementById("crystals").innerText = crystals;
+    document.getElementById("fluidAmount").innerText = fluidAmount;
+    document.getElementById("fluid").style.height = `${fluidAmount}%`;
+
+    const oreList = document.getElementById("oreList");
+    oreList.innerHTML = "";
+    for (const ore of ores) {
+        for (const quality of qualities) {
+            const key = `${ore.name}（${quality}）`;
+            const data = ownedOres[key];
+            if (data) {
+                const div = document.createElement("div");
+                div.className = "oreItem";
+                div.innerHTML = `<span style="color:${ore.color}">${key}</span>: ${formatNumber(data.count)} 
+                    <button onclick="meltOre('${key}')">溶かす</button> 
+                    <button onclick="sellOre('${key}')">売る</button>`;
+                oreList.appendChild(div);
+            }
+        }
+    }
+
+    const alloyList = document.getElementById("alloyList");
+    alloyList.innerHTML = "";
+    for (const alloy in ownedAlloys) {
+        const count = ownedAlloys[alloy];
+        const div = document.createElement("div");
+        div.className = "alloyItem";
+        div.innerHTML = `${alloy}: ${formatNumber(count)} 
+            <button onclick="sellAlloy('${alloy}')">売る</button>`;
+        alloyList.appendChild(div);
+    }
+
+    const upgradeArea = document.getElementById("upgradeList");
+    upgradeArea.innerHTML = "";
+    for (const upg of upgradeList) {
+        const div = document.createElement("div");
+        div.className = "upgradeItem";
+        div.innerHTML = `${upg.name} (必要: ${upg.cost}結晶) <button onclick="buyUpgrade('${upg.key}')">購入</button>`;
+        upgradeArea.appendChild(div);
+    }
+}
+
+// ===== イベント登録 =====
+document.getElementById("clickStone").onclick = addOre;
+document.getElementById("toggleAuto").onclick = toggleAutoClick;
+document.getElementById("processAlloy").onclick = processAlloy;
+document.getElementById("transcend").onclick = transcend;
+document.getElementById("save").onclick = () => localStorage.setItem("oreClickerSave", JSON.stringify({
+    breakCount, money, crystals, fluidAmount, ownedOres, ownedAlloys, upgrades
+}));
+document.getElementById("load").onclick = () => {
+    const data = JSON.parse(localStorage.getItem("oreClickerSave"));
+    if (!data) return;
+    breakCount = data.breakCount;
+    money = data.money;
+    crystals = data.crystals;
+    fluidAmount = data.fluidAmount;
+    ownedOres = data.ownedOres || {};
+    ownedAlloys = data.ownedAlloys || {};
+    upgrades = data.upgrades || upgrades;
+    updateDisplay();
+};
+
+setInterval(() => {
+    if (autoClick) addOre();
+}, 100);
+
+updateDisplay();
+</script>
+
+</body>
+</html>
