@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>ZpDIC 自動合成＆一括登録ツール</title>
+  <meta charset="UTF-8" />
+  <title>ZpDIC 自動合成＋タグ対応 一括登録ツール</title>
   <style>
     body { font-family: sans-serif; margin: 20px; }
     input, textarea, button { display: block; margin: 10px 0; width: 500px; }
@@ -11,29 +11,30 @@
   </style>
 </head>
 <body>
-  <h1>ZpDIC 単語一括登録＋自動合成ツール</h1>
 
-  <label>APIキー</label>
-  <input type="text" id="apikey">
+<h1>ZpDIC 単語一括登録＋自動合成ツール（タグ対応）</h1>
 
-  <label>辞書ID</label>
-  <input type="text" id="dictid">
+<label>APIキー</label>
+<input type="text" id="apikey" />
 
-  <label>登録間隔（秒）</label>
-  <input type="number" id="interval" min="0.1" step="0.1" value="1.25">
+<label>辞書ID</label>
+<input type="text" id="dictid" />
 
-  <button onclick="saveSettings()">設定を保存</button>
-  <span class="small">※ローカルストレージに保存されます</span>
+<label>登録間隔（秒）</label>
+<input type="number" id="interval" min="0.1" step="0.1" value="1.25" />
 
-  <hr>
+<button onclick="saveSettings()">設定を保存</button>
+<span class="small">※ローカルストレージに保存されます</span>
 
-  <h2>合成語自動生成</h2>
+<hr />
 
-  <label>構成語リスト（1行1単語）</label>
-  <textarea id="basewords" rows="5" placeholder="例: elst&#10;vartin&#10;garqi"></textarea>
+<h2>合成語自動生成</h2>
 
-  <label>スクリプト設定（JSON）</label>
-  <textarea id="scriptjson" rows="5">
+<label>構成語リスト（1行1単語）</label>
+<textarea id="basewords" rows="5" placeholder="例: elst&#10;vartin&#10;garqi"></textarea>
+
+<label>スクリプト設定（JSON）</label>
+<textarea id="scriptjson" rows="5">
 {
   "keep_start": 2,
   "keep_end": 2,
@@ -41,21 +42,21 @@
   "join_char": "",
   "max_results": 20
 }
-  </textarea>
+</textarea>
 
-  <button onclick="runAutoGenerate()">合成語生成 → 一括登録へ</button>
+<button onclick="runAutoGenerate()">合成語生成 → 一括登録へ</button>
 
-  <button onclick="loadSihyou()">sihyou.txt を読み込む</button>
-  <span class="small">※フォーマット：elst,光(抽象)</span>
+<button onclick="loadSihyou()">sihyou.txt を読み込む</button>
+<span class="small">※フォーマット：elst,光(抽象)</span>
 
-  <hr>
+<hr />
 
-  <label>単語リスト（1行 = 単語,発音,対応語,派生語,タグ）</label>
-  <textarea id="wordlist" rows="10"></textarea>
+<label>単語リスト（1行 = 単語,発音,対応語,派生語,タグ）</label>
+<textarea id="wordlist" rows="10"></textarea>
 
-  <button onclick="startBatch()">一括登録開始</button>
+<button onclick="startBatch()">一括登録開始</button>
 
-  <div class="log" id="log"></div>
+<div class="log" id="log"></div>
 
 <script>
 let meaningDict = {};
@@ -64,13 +65,11 @@ function saveSettings() {
   localStorage.setItem('zp_apikey', document.getElementById('apikey').value);
   localStorage.setItem('zp_dictid', document.getElementById('dictid').value);
   localStorage.setItem('zp_interval', document.getElementById('interval').value);
-  localStorage.setItem('scriptjson', document.getElementById('scriptjson').value);
   log("✅ 設定を保存しました");
 }
 
 function loadSettings() {
   document.getElementById('apikey').value = localStorage.getItem('zp_apikey') || '';
-  document.getElementById('scriptjson').value = localStorage.getItem('scriptjson') || '';
   document.getElementById('dictid').value = localStorage.getItem('zp_dictid') || '';
   document.getElementById('interval').value = localStorage.getItem('zp_interval') || '1.25';
 }
@@ -81,6 +80,17 @@ function log(message) {
   logDiv.scrollTop = logDiv.scrollHeight;
 }
 
+// (タグ抽出) 訳語の (タグ1 タグ2 ...) を抽出して分離
+function parseMeaning(value) {
+  const tagMatch = value.match(/^(.*?)\((.*?)\)$/);
+  if (tagMatch) {
+    const meaning = tagMatch[1].trim();
+    const tags = tagMatch[2].split(/[\s,]+/).map(t => t.trim()).filter(Boolean);
+    return { meaning, tags };
+  }
+  return { meaning: value.trim(), tags: [] };
+}
+
 function loadSihyou() {
   fetch('sihyou.txt')
     .then(res => res.text())
@@ -88,7 +98,9 @@ function loadSihyou() {
       meaningDict = {};
       text.split('\n').forEach(line => {
         const [key, value] = line.split(',');
-        if (key && value) meaningDict[key.trim()] = value.trim();
+        if (key && value) {
+          meaningDict[key.trim()] = parseMeaning(value);
+        }
       });
       log("✅ sihyou.txt を読み込みました");
     })
@@ -97,7 +109,6 @@ function loadSihyou() {
 
 function generateWords(bases, config) {
   const result = [];
-
   while (result.length < config.max_results) {
     let a = bases[Math.floor(Math.random() * bases.length)];
     let b = bases[Math.floor(Math.random() * bases.length)];
@@ -110,17 +121,26 @@ function generateWords(bases, config) {
       ? cutB + (config.join_char || '') + cutA
       : cutA + (config.join_char || '') + cutB;
 
-    const meanings = [];
-    if (meaningDict[a]) meanings.push(meaningDict[a]);
-    if (meaningDict[b]) meanings.push(meaningDict[b]);
+    const equivalentsArr = [];
+    const tagsArr = [];
+
+    if (meaningDict[a]) {
+      equivalentsArr.push(meaningDict[a].meaning);
+      tagsArr.push(...meaningDict[a].tags);
+    }
+    if (meaningDict[b]) {
+      equivalentsArr.push(meaningDict[b].meaning);
+      tagsArr.push(...meaningDict[b].tags);
+    }
+    const uniqueTags = [...new Set(tagsArr)];
 
     result.push({
       name: combined,
-      equivalents: meanings.join('、') || "（不明）",
+      equivalents: equivalentsArr.join('、') || "（不明）",
+      tags: uniqueTags,
       sources: [a, b]
     });
   }
-
   return result;
 }
 
@@ -130,7 +150,7 @@ function autoToWordList(generated) {
     const reading = head;
     const equivalents = entry.equivalents;
     const variations = entry.sources.join(' ');
-    const tags = "自動生成";
+    const tags = entry.tags.length > 0 ? entry.tags.join(' ') + " 自動生成" : "自動生成";
     return `${head},${reading},${equivalents},${variations},${tags}`;
   });
   document.getElementById('wordlist').value = lines.join('\n');
@@ -244,5 +264,6 @@ function startBatch() {
 
 loadSettings();
 </script>
+
 </body>
 </html>
