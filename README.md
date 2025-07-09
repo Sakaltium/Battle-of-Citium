@@ -5,6 +5,7 @@ https://raw.githubusercontent.com/Konnitiwa768/jsonstorage/main/sakalti.json
 https://chatgpt.com
 https://Saus2.github.io/Battle-of-Citium/Idle4.html
 https://konnitiwa768.github.io/Battle-of-Citium/Es.html
+https://konnitiwa768.github.io/Battle-of-Citium/Testk.html
 https://konnitiwa768.github.io/Battle-of-Citium/Crystal2.html
 4701
 ores: ["石英石", "黄鉄鉱"], qualities: ["普通", "良質"], result: "スチール合金" },
