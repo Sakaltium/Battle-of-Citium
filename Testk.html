@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ZpDIC 自動合成＆一括登録ツール</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    input, textarea, button { display: block; margin: 10px 0; width: 500px; }
+    .log { margin-top: 20px; border: 1px solid #ccc; padding: 10px; height: 250px; overflow-y: scroll; background: #f9f9f9; }
+    .small { font-size: 12px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>ZpDIC 単語一括登録＋自動合成ツール</h1>
+
+  <label>APIキー</label>
+  <input type="text" id="apikey">
+
+  <label>辞書ID</label>
+  <input type="text" id="dictid">
+
+  <label>登録間隔（秒）</label>
+  <input type="number" id="interval" min="0.1" step="0.1" value="1.25">
+
+  <button onclick="saveSettings()">設定を保存</button>
+  <span class="small">※ローカルストレージに保存されます</span>
+
+  <hr>
+
+  <h2>合成語自動生成</h2>
+
+  <label>構成語リスト（1行1単語）</label>
+  <textarea id="basewords" rows="5" placeholder="例: elst&#10;vartin&#10;garqi"></textarea>
+
+  <label>スクリプト設定（JSON）</label>
+  <textarea id="scriptjson" rows="5">
+{
+  "keep_start": 2,
+  "keep_end": 2,
+  "reorder_prob": 0.3,
+  "join_char": "",
+  "max_results": 20
+}
+  </textarea>
+
+  <button onclick="runAutoGenerate()">合成語生成 → 一括登録へ</button>
+
+  <button onclick="loadSihyou()">sihyou.txt を読み込む</button>
+  <span class="small">※フォーマット：elst,光(抽象)</span>
+
+  <hr>
+
+  <label>単語リスト（1行 = 単語,発音,対応語,派生語,タグ）</label>
+  <textarea id="wordlist" rows="10"></textarea>
+
+  <button onclick="startBatch()">一括登録開始</button>
+
+  <div class="log" id="log"></div>
+
+<script>
+let meaningDict = {};
+
+function saveSettings() {
+  localStorage.setItem('zp_apikey', document.getElementById('apikey').value);
+  localStorage.setItem('zp_dictid', document.getElementById('dictid').value);
+  localStorage.setItem('zp_interval', document.getElementById('interval').value);
+  localStorage.setItem('scriptjson', document.getElementById('scriptjson').value);
+  log("✅ 設定を保存しました");
+}
+
+function loadSettings() {
+  document.getElementById('apikey').value = localStorage.getItem('zp_apikey') || '';
+  document.getElementById('scriptjson').value = localStorage.getItem('scriptjson') || '';
+  document.getElementById('dictid').value = localStorage.getItem('zp_dictid') || '';
+  document.getElementById('interval').value = localStorage.getItem('zp_interval') || '1.25';
+}
+
+function log(message) {
+  const logDiv = document.getElementById('log');
+  logDiv.innerHTML += message + "<br>";
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function loadSihyou() {
+  fetch('sihyou.txt')
+    .then(res => res.text())
+    .then(text => {
+      meaningDict = {};
+      text.split('\n').forEach(line => {
+        const [key, value] = line.split(',');
+        if (key && value) meaningDict[key.trim()] = value.trim();
+      });
+      log("✅ sihyou.txt を読み込みました");
+    })
+    .catch(err => log("❌ sihyou.txt 読み込み失敗：" + err));
+}
+
+function generateWords(bases, config) {
+  const result = [];
+
+  while (result.length < config.max_results) {
+    let a = bases[Math.floor(Math.random() * bases.length)];
+    let b = bases[Math.floor(Math.random() * bases.length)];
+    if (a === b) continue;
+
+    const cutA = a.substring(0, config.keep_start || 2);
+    const cutB = b.slice(-(config.keep_end || 2));
+
+    const combined = Math.random() < (config.reorder_prob || 0.3)
+      ? cutB + (config.join_char || '') + cutA
+      : cutA + (config.join_char || '') + cutB;
+
+    const meanings = [];
+    if (meaningDict[a]) meanings.push(meaningDict[a]);
+    if (meaningDict[b]) meanings.push(meaningDict[b]);
+
+    result.push({
+      name: combined,
+      equivalents: meanings.join('、') || "（不明）",
+      sources: [a, b]
+    });
+  }
+
+  return result;
+}
+
+function autoToWordList(generated) {
+  const lines = generated.map(entry => {
+    const head = entry.name;
+    const reading = head;
+    const equivalents = entry.equivalents;
+    const variations = entry.sources.join(' ');
+    const tags = "自動生成";
+    return `${head},${reading},${equivalents},${variations},${tags}`;
+  });
+  document.getElementById('wordlist').value = lines.join('\n');
+  log(`✅ ${lines.length} 件の合成語を追加しました`);
+}
+
+function runAutoGenerate() {
+  const baseWords = document.getElementById('basewords').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
+  if (baseWords.length < 2) return alert("構成語を2つ以上入力してください");
+
+  let config;
+  try {
+    config = JSON.parse(document.getElementById('scriptjson').value);
+  } catch (e) {
+    return alert("スクリプト設定が不正です");
+  }
+
+  const result = generateWords(baseWords, config);
+  autoToWordList(result);
+}
+
+function startBatch() {
+  const apikey = document.getElementById('apikey').value.trim();
+  const dictid = document.getElementById('dictid').value.trim();
+  const intervalMs = (parseFloat(document.getElementById('interval').value.trim()) || 1.25) * 1000;
+  const lines = document.getElementById('wordlist').value.trim().split('\n');
+
+  if (!apikey || !dictid) {
+    alert("APIキーと辞書IDを入力してください");
+    return;
+  }
+
+  const BASE_URL = `https://zpdic.ziphil.com/api/v0/dictionary/${dictid}/word`;
+  let index = 0;
+
+  function processNext() {
+    if (index >= lines.length) {
+      log("✅ 全ての単語を処理しました");
+      return;
+    }
+
+    const line = lines[index].trim();
+    if (!line) {
+      index++;
+      setTimeout(processNext, intervalMs);
+      return;
+    }
+
+    const parts = line.split(',');
+    const headword = parts[0]?.trim() || '';
+    const pronunciation = parts[1]?.trim() || headword;
+    const equivalentsRaw = parts[2]?.trim() || '';
+    const variationsRaw = parts[3]?.trim() || '';
+    const tagsRaw = parts[4]?.trim() || '';
+
+    if (!headword || !equivalentsRaw) {
+      log(`⚠️ スキップ：形式不正「${line}」`);
+      index++;
+      setTimeout(processNext, intervalMs);
+      return;
+    }
+
+    const equivalents = [{
+      titles: ["名詞"],
+      names: equivalentsRaw.split(/[\s,]+/),
+      nameString: equivalentsRaw
+    }];
+
+    const variations = variationsRaw ? variationsRaw.split(/[\s,]+/).map(name => ({ title: "派生", name })) : [];
+    const tags = tagsRaw ? tagsRaw.split(/[\s,]+/) : [];
+
+    const wordData = {
+      name: headword,
+      pronunciation: pronunciation,
+      equivalents: equivalents,
+      tags: tags,
+      informations: [],
+      variations: variations,
+      relations: []
+    };
+
+    fetch(BASE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apikey
+      },
+      body: JSON.stringify({ word: wordData })
+    })
+    .then(res => {
+      if (res.ok) {
+        log(`✅ ${headword} 登録成功`);
+        index++;
+        setTimeout(processNext, intervalMs);
+      } else if (res.status === 429) {
+        log(`⏳ ${headword} 登録制限中、再試行します`);
+        setTimeout(processNext, intervalMs * 2);
+      } else {
+        return res.text().then(text => { throw new Error(text); });
+      }
+    })
+    .catch(err => {
+      log(`❌ ${headword} 登録失敗: ${err.message}`);
+      index++;
+      setTimeout(processNext, intervalMs);
+    });
+  }
+
+  processNext();
+}
+
+loadSettings();
+</script>
+</body>
+</html>
