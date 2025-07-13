@@ -6,7 +6,7 @@ https://raw.githubusercontent.com/Konnitiwa768/jsonstorage/main/sakalti.json
 https://chatgpt.com
 https://Saus2.github.io/Battle-of-Citium/Idle4.html
 
-https://konnitiwa768.github.io/Battle-of-Citium/Ekir.html
+https://konnitiwa768.github.io/Battle-of-Citium/Ekir2.html
 https://konnitiwa768.github.io/Battle-of-Citium/Es.html
 https://konnitiwa768.github.io/Battle-of-Citium/Testk.html
 https://konnitiwa768.github.io/Battle-of-Citium/Crystal2.html
