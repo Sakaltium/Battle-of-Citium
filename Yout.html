@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Supertube クリッカーゲーム</title>
+<title>Supertube 統合クリッカーゲーム</title>
 <style>
   body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }
   #stats { margin-bottom: 20px; }
@@ -10,11 +10,14 @@
   select, input { margin: 5px; }
   .policy { display: inline-block; margin: 5px; padding: 5px; border: 1px solid #888; cursor: pointer; }
   .policy.active { background: #cfc; }
+  .video-list { margin-top: 10px; background: #f8f8f8; padding: 10px; max-height: 200px; overflow-y: auto; }
+  .video-item { padding: 5px; border-bottom: 1px solid #ccc; }
 </style>
 </head>
 <body>
 
-<h1>Supertube クリッカーゲーム</h1>
+<h1>Supertube 統合クリッカーゲーム</h1>
+
 <div id="stats">
   <p>登録者: <span id="subs">0</span></p>
   <p>お金: <span id="money">0</span></p>
@@ -25,6 +28,7 @@
 <button id="clicker" class="btn">クリックで登録者獲得 +1</button>
 <button id="create" class="btn">動画作成</button>
 <button id="sleep" class="btn">寝る (労力回復)</button>
+<button id="prestigeBtn" class="btn">転生（Prestige）</button>
 <br>
 
 <select id="genre"><option>ジャンル</option></select>
@@ -32,27 +36,29 @@
 <br>
 <label>時間(分):<input type="number" id="duration" value="5" min="1" max="60"></label>
 <label><input type="checkbox" id="isShorts"> ショーツ</label>
+<br>
+
+<h3>動画一覧</h3>
+<div id="videoList" class="video-list"></div>
 
 <h3>政策（クリックor動画強化など 10個）</h3>
 <div id="policies"></div>
 
-<button id="prestigeBtn" class="btn">転生（Prestige）</button>
-
 <script>
 // --- 初期データ ---
 const genres = [
-  {name:"ゲーム", base:100, effort:20},
-  {name:"Vlog", base:80, effort:15},
-  {name:"教育", base:120, effort:25},
-  {name:"コメディ", base:90, effort:18},
-  {name:"美容", base:110, effort:22},
-  {name:"ニュース", base:70, effort:10}
+  {name:"ゲーム", base:100, effort:40},
+  {name:"Vlog", base:80, effort:30},
+  {name:"教育", base:120, effort:60},
+  {name:"コメディ", base:90, effort:45},
+  {name:"美容", base:110, effort:55},
+  {name:"ニュース", base:70, effort:30}
 ];
 const subgenres = ["実況","レビュー","ハウツー","チャレンジ","比較","生配信"];
 const policiesData = [
   {name:"サムネイル強化", cost:10000, effect:"clickBoost"},
   {name:"編集の質向上", cost:20000, effect:"videoBoost"},
-  {name:"SEO対策", cost:30000, effect:"passiveIncomeBoost"},
+  {name:"SEO対策", cost:30000, effect:"growthBoost"},
   {name:"SNS広告", cost:50000, effect:"viralChance"},
   {name:"企業案件誘致", cost:100000, effect:"moneyBoost"},
   {name:"再生リスト整理", cost:25000, effect:"retention"},
@@ -62,12 +68,32 @@ const policiesData = [
   {name:"ショーツ連投", cost:45000, effect:"shortsPush"}
 ];
 
-// --- State ---
-let subs=0, money=0, effort=0, maxEffort=100, prestige=0;
-let clickBoost=1, videoBoost=1, passiveIncome=0, viralChance=0;
-let selectedPolicies = new Set();
+// --- Stateの復元と初期値 ---
+let state = {
+  subs: 0,
+  money: 0,
+  effort: 0,
+  maxEffort: 100,
+  prestige: 0,
+  clickBoost: 1,
+  videoBoost: 1,
+  growthBoost: 1,
+  viralChance: 0,
+  moneyBoost: 1,
+  passiveIncome: 0,
+  videoList: [],
+  selectedPolicies: new Set()
+};
+if(localStorage.supertube){
+  try {
+    const loaded = JSON.parse(localStorage.supertube);
+    Object.assign(state, loaded);
+    // Setから配列になってる可能性に対応
+    if(Array.isArray(state.selectedPolicies)) state.selectedPolicies = new Set(state.selectedPolicies);
+  } catch(e){}
+}
 
-// --- UI 初期化 ---
+// --- UI Elements ---
 const subsEl = document.getElementById("subs");
 const moneyEl = document.getElementById("money");
 const effortEl = document.getElementById("effort");
@@ -76,16 +102,87 @@ const prestigeEl = document.getElementById("prestige");
 const genreEl = document.getElementById("genre");
 const subgenreEl = document.getElementById("subgenre");
 const policiesEl = document.getElementById("policies");
+const videoListEl = document.getElementById("videoList");
 
-genres.forEach((g,i)=> genreEl.add(new Option(g.name,i)));
-subgenres.forEach((s,i)=> subgenreEl.add(new Option(s,i)));
-policiesData.forEach((p,i)=>{
-  const div = document.createElement("div");
-  div.textContent = `${p.name} (${p.cost})`;
-  div.className = "policy";
-  div.onclick = ()=>togglePolicy(i,div);
-  policiesEl.appendChild(div);
-});
+// --- 初期UIセットアップ ---
+function initUI(){
+  genres.forEach((g,i)=> genreEl.add(new Option(g.name,i)));
+  subgenres.forEach((s,i)=> subgenreEl.add(new Option(s,i)));
+  policiesEl.innerHTML = "";
+  policiesData.forEach((p,i)=>{
+    const div = document.createElement("div");
+    div.textContent = `${p.name} (${p.cost.toLocaleString()})`;
+    div.className = "policy";
+    div.onclick = () => togglePolicy(i, div);
+    if(state.selectedPolicies.has(i)) div.classList.add("active");
+    policiesEl.appendChild(div);
+  });
+}
+
+// --- 保存 ---
+function saveState(){
+  // selectedPoliciesを配列に変換して保存
+  const copy = {...state, selectedPolicies: Array.from(state.selectedPolicies)};
+  localStorage.supertube = JSON.stringify(copy);
+}
+
+// --- UI更新 ---
+function updateUI(){
+  subsEl.textContent = Math.floor(state.subs).toLocaleString();
+  moneyEl.textContent = (state.money * state.moneyBoost).toFixed(1);
+  effortEl.textContent = Math.floor(state.effort);
+  maxEffortEl.textContent = state.maxEffort;
+  prestigeEl.textContent = state.prestige;
+  renderVideos();
+  saveState();
+}
+
+// --- 動画一覧表示 ---
+function renderVideos(){
+  videoListEl.innerHTML = "";
+  // 最新順に表示
+  state.videoList.slice().reverse().forEach(v=>{
+    const div = document.createElement("div");
+    div.className = "video-item";
+    div.textContent = `${v.time} 「${v.title}」 +${v.gain}人 (${v.effort}労力)`;
+    videoListEl.appendChild(div);
+  });
+}
+
+// --- ポリシートグル ---
+function togglePolicy(i, el){
+  const p = policiesData[i];
+  if(state.selectedPolicies.has(i)){
+    // 外すとき（効果は現状保持したまま：必要あれば細かく戻すロジック追加可能）
+    state.selectedPolicies.delete(i);
+    el.classList.remove("active");
+  } else {
+    if(state.money < p.cost){
+      alert("お金が足りません");
+      return;
+    }
+    state.money -= p.cost;
+    state.selectedPolicies.add(i);
+    el.classList.add("active");
+    // 効果付与
+    switch(p.effect){
+      case "clickBoost": state.clickBoost *= 1.2; break;
+      case "videoBoost": state.videoBoost *= 1.2; break;
+      case "growthBoost": state.growthBoost *= 1.3; break;
+      case "viralChance": state.viralChance += 0.05; break;
+      case "moneyBoost": state.moneyBoost *= 1.2; break;
+      case "passiveIncomeBoost": state.passiveIncome += 1; break;
+      // 他は未実装のまま保持
+    }
+  }
+  updateUI();
+}
+
+// --- 登録者獲得関数 ---
+function gainSubs(amount){
+  state.subs += amount;
+  if(state.subs > 1000) state.popularity = Math.floor(state.subs / 1000);
+}
 
 // --- 転生必要登録者数計算 ---
 function requiredPrestige(n){
@@ -99,87 +196,96 @@ function requiredPrestige(n){
   return tot;
 }
 
-// --- ボタン処理 ---
-document.getElementById("clicker").onclick = ()=>{
-  subs += clickBoost;
+// --- ボタン操作 ---
+document.getElementById("clicker").onclick = () => {
+  gainSubs(state.clickBoost);
   updateUI();
 };
-document.getElementById("sleep").onclick = ()=>{
-  effort = Math.max(0, effort - 50);
-  subs = Math.max(0, subs - 10); // 夜寝るペナルティ
+document.getElementById("sleep").onclick = () => {
+  state.effort = Math.max(0, state.effort - 50);
+  // 寝ると少し登録者減るペナルティ
+  state.subs = Math.max(0, state.subs - 10);
   updateUI();
 };
-document.getElementById("create").onclick = ()=>{
+document.getElementById("create").onclick = () => {
   const gi = +genreEl.value;
   const si = +subgenreEl.value;
-  if(isNaN(gi)||isNaN(si)){ alert("ジャンルとサブジャンルを選んでください"); return; }
+  if(isNaN(gi) || isNaN(si)){
+    alert("ジャンルとサブジャンルを選んでください");
+    return;
+  }
+  const g = genres[gi];
   const dur = +document.getElementById("duration").value;
   const isS = document.getElementById("isShorts").checked;
-  const g = genres[gi];
-  const effortCost = Math.floor(g.effort * (isS?0.5:1));
-  if(effort + effortCost > maxEffort){ alert("労力が足りません"); return; }
-  effort += effortCost;
-  let gain = Math.floor(g.base * (1 + dur/10) * (["実況","チャレンジ"].includes(subgenres[si])?1.2:1));
-  gain = Math.floor(gain * videoBoost);
-  if(isS && selectedPolicies.has(9)) gain = Math.floor(gain * 1.5);
-  if(Math.random() < viralChance) gain *= 2;
-  subs += gain;
-  money += gain * 0.1;
+
+  // 労力計算：前者の式に寄せて、ショーツなら半分
+  const effortCost = Math.floor((g.effort + dur) * (isS ? 0.5 : 1));
+  if(state.effort + effortCost > state.maxEffort){
+    alert("労力が足りません");
+    return;
+  }
+  state.effort += effortCost;
+
+  // 登録者増加計算
+  let gain = Math.floor(g.base * (1 + dur/10) * state.growthBoost);
+  // サブジャンルボーナス（実況、チャレンジ1.2倍）
+  if(["実況","チャレンジ"].includes(subgenres[si])) gain = Math.floor(gain * 1.2);
+  // 動画強化政策反映
+  gain = Math.floor(gain * state.videoBoost);
+  // ショーツ政策ボーナス
+  if(isS && state.selectedPolicies.has(9)) gain = Math.floor(gain * 1.5);
+  // バイラル効果
+  if(Math.random() < state.viralChance) gain *= 2;
+
+  gainSubs(gain);
+  // お金増加は政策のmoneyBoostも反映
+  state.money += gain * 0.1 * state.moneyBoost;
+
+  // 動画履歴に追加
+  state.videoList.push({title: `動画(${genres[gi].name}/${subgenres[si]})`, gain, effort: effortCost, time: new Date().toLocaleTimeString()});
+
   updateUI();
 };
-document.getElementById("prestigeBtn").onclick = ()=>{
-  const need = requiredPrestige(prestige+1);
-  if(subs >= need){
-    prestige++;
-    subs = 0;
-    money = 0;
-    effort = 0;
+document.getElementById("prestigeBtn").onclick = () => {
+  const need = requiredPrestige(state.prestige+1);
+  if(state.subs >= need){
+    state.prestige++;
+    state.subs = 0;
+    state.money = 0;
+    state.effort = 0;
+    state.videoList = [];
     // 転生ボーナス
-    clickBoost *= 1.1;
-    videoBoost *= 1.1;
-    passiveIncome += 1;
+    state.clickBoost *= 1.1;
+    state.videoBoost *= 1.1;
+    state.growthBoost *= 1.2;
+    state.passiveIncome += 1;
+    alert("転生！強くなった！");
     updateUI();
   } else {
     alert(`転生に必要な登録者数: ${need.toLocaleString()}`);
   }
 };
 
-// --- 政策トグル ---
-function togglePolicy(i,el){
-  const p = policiesData[i];
-  if(selectedPolicies.has(i)){
-    selectedPolicies.delete(i);
-    el.classList.remove("active");
-    // TODO: ポリシー無効化時のステータス変更（必要に応じ追加）
-  } else if(money >= p.cost){
-    selectedPolicies.add(i);
-    money -= p.cost;
-    el.classList.add("active");
-    // ポリシー効果付与
-    if(p.effect==="clickBoost") clickBoost*=1.2;
-    if(p.effect==="videoBoost") videoBoost*=1.2;
-    if(p.effect==="viralChance") viralChance+=0.05;
-  } else {
-    alert("お金が足りません");
-  }
+// --- 自動登録者増加（10分毎） ---
+setInterval(() => {
+  const rand = Math.random();
+  const basePopularity = state.popularity || 1;
+  const base = basePopularity * (rand < 0.3 ? 1 : rand < 0.6 ? 10 : 100);
+  const amount = Math.floor(base * state.growthBoost);
+  gainSubs(amount);
   updateUI();
-}
+}, 600000); // 600,000ms = 10分
 
-// --- 自動収益＆表示更新 ---
-function updateUI(){
-  subsEl.textContent = subs.toLocaleString();
-  moneyEl.textContent = money.toFixed(1);
-  effortEl.textContent = effort;
-  maxEffortEl.textContent = maxEffort;
-  prestigeEl.textContent = prestige;
-}
-setInterval(()=>{
-  subs += passiveIncome;
+// --- パッシブ登録者増加（秒毎） ---
+setInterval(() => {
+  gainSubs(state.passiveIncome);
   updateUI();
 }, 1000);
 
+// --- 初期化 ---
+initUI();
 updateUI();
-
 </script>
+
 </body>
 </html>
