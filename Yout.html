@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Supertube クリッカーゲーム</title>
+<style>
+  body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+  #stats { margin-bottom: 20px; }
+  .btn { margin: 5px; padding: 10px 15px; }
+  select, input { margin: 5px; }
+  .policy { display: inline-block; margin: 5px; padding: 5px; border: 1px solid #888; cursor: pointer; }
+  .policy.active { background: #cfc; }
+</style>
+</head>
+<body>
+
+<h1>Supertube クリッカーゲーム</h1>
+<div id="stats">
+  <p>登録者: <span id="subs">0</span></p>
+  <p>お金: <span id="money">0</span></p>
+  <p>労力: <span id="effort">0</span> / <span id="maxEffort">100</span></p>
+  <p>転生ポイント: <span id="prestige">0</span></p>
+</div>
+
+<button id="clicker" class="btn">クリックで登録者獲得 +1</button>
+<button id="create" class="btn">動画作成</button>
+<button id="sleep" class="btn">寝る (労力回復)</button>
+<br>
+
+<select id="genre"><option>ジャンル</option></select>
+<select id="subgenre"><option>サブジャンル</option></select>
+<br>
+<label>時間(分):<input type="number" id="duration" value="5" min="1" max="60"></label>
+<label><input type="checkbox" id="isShorts"> ショーツ</label>
+
+<h3>政策（クリックor動画強化など 10個）</h3>
+<div id="policies"></div>
+
+<button id="prestigeBtn" class="btn">転生（Prestige）</button>
+
+<script>
+// --- 初期データ ---
+const genres = [
+  {name:"ゲーム", base:100, effort:20},
+  {name:"Vlog", base:80, effort:15},
+  {name:"教育", base:120, effort:25},
+  {name:"コメディ", base:90, effort:18},
+  {name:"美容", base:110, effort:22},
+  {name:"ニュース", base:70, effort:10}
+];
+const subgenres = ["実況","レビュー","ハウツー","チャレンジ","比較","生配信"];
+const policiesData = [
+  {name:"サムネイル強化", cost:10000, effect:"clickBoost"},
+  {name:"編集の質向上", cost:20000, effect:"videoBoost"},
+  {name:"SEO対策", cost:30000, effect:"passiveIncomeBoost"},
+  {name:"SNS広告", cost:50000, effect:"viralChance"},
+  {name:"企業案件誘致", cost:100000, effect:"moneyBoost"},
+  {name:"再生リスト整理", cost:25000, effect:"retention"},
+  {name:"夜配信戦略", cost:15000, effect:"nightBoost"},
+  {name:"コミュニティ活用", cost:35000, effect:"fanLoyalty"},
+  {name:"マルチ運用", cost:120000, effect:"altIncome"},
+  {name:"ショーツ連投", cost:45000, effect:"shortsPush"}
+];
+
+// --- State ---
+let subs=0, money=0, effort=0, maxEffort=100, prestige=0;
+let clickBoost=1, videoBoost=1, passiveIncome=0, viralChance=0;
+let selectedPolicies = new Set();
+
+// --- UI 初期化 ---
+const subsEl = document.getElementById("subs");
+const moneyEl = document.getElementById("money");
+const effortEl = document.getElementById("effort");
+const maxEffortEl = document.getElementById("maxEffort");
+const prestigeEl = document.getElementById("prestige");
+const genreEl = document.getElementById("genre");
+const subgenreEl = document.getElementById("subgenre");
+const policiesEl = document.getElementById("policies");
+
+genres.forEach((g,i)=> genreEl.add(new Option(g.name,i)));
+subgenres.forEach((s,i)=> subgenreEl.add(new Option(s,i)));
+policiesData.forEach((p,i)=>{
+  const div = document.createElement("div");
+  div.textContent = `${p.name} (${p.cost})`;
+  div.className = "policy";
+  div.onclick = ()=>togglePolicy(i,div);
+  policiesEl.appendChild(div);
+});
+
+// --- 転生必要登録者数計算 ---
+function requiredPrestige(n){
+  const base = 1e12;
+  let inc = 5, add=0, tot=base;
+  for(let i=2;i<=n;i++){
+    add += inc;
+    if((i-1)%5===0) inc+=20;
+    tot += base * add;
+  }
+  return tot;
+}
+
+// --- ボタン処理 ---
+document.getElementById("clicker").onclick = ()=>{
+  subs += clickBoost;
+  updateUI();
+};
+document.getElementById("sleep").onclick = ()=>{
+  effort = Math.max(0, effort - 50);
+  subs = Math.max(0, subs - 10); // 夜寝るペナルティ
+  updateUI();
+};
+document.getElementById("create").onclick = ()=>{
+  const gi = +genreEl.value;
+  const si = +subgenreEl.value;
+  if(isNaN(gi)||isNaN(si)){ alert("ジャンルとサブジャンルを選んでください"); return; }
+  const dur = +document.getElementById("duration").value;
+  const isS = document.getElementById("isShorts").checked;
+  const g = genres[gi];
+  const effortCost = Math.floor(g.effort * (isS?0.5:1));
+  if(effort + effortCost > maxEffort){ alert("労力が足りません"); return; }
+  effort += effortCost;
+  let gain = Math.floor(g.base * (1 + dur/10) * (["実況","チャレンジ"].includes(subgenres[si])?1.2:1));
+  gain = Math.floor(gain * videoBoost);
+  if(isS && selectedPolicies.has(9)) gain = Math.floor(gain * 1.5);
+  if(Math.random() < viralChance) gain *= 2;
+  subs += gain;
+  money += gain * 0.1;
+  updateUI();
+};
+document.getElementById("prestigeBtn").onclick = ()=>{
+  const need = requiredPrestige(prestige+1);
+  if(subs >= need){
+    prestige++;
+    subs = 0;
+    money = 0;
+    effort = 0;
+    // 転生ボーナス
+    clickBoost *= 1.1;
+    videoBoost *= 1.1;
+    passiveIncome += 1;
+    updateUI();
+  } else {
+    alert(`転生に必要な登録者数: ${need.toLocaleString()}`);
+  }
+};
+
+// --- 政策トグル ---
+function togglePolicy(i,el){
+  const p = policiesData[i];
+  if(selectedPolicies.has(i)){
+    selectedPolicies.delete(i);
+    el.classList.remove("active");
+    // TODO: ポリシー無効化時のステータス変更（必要に応じ追加）
+  } else if(money >= p.cost){
+    selectedPolicies.add(i);
+    money -= p.cost;
+    el.classList.add("active");
+    // ポリシー効果付与
+    if(p.effect==="clickBoost") clickBoost*=1.2;
+    if(p.effect==="videoBoost") videoBoost*=1.2;
+    if(p.effect==="viralChance") viralChance+=0.05;
+  } else {
+    alert("お金が足りません");
+  }
+  updateUI();
+}
+
+// --- 自動収益＆表示更新 ---
+function updateUI(){
+  subsEl.textContent = subs.toLocaleString();
+  moneyEl.textContent = money.toFixed(1);
+  effortEl.textContent = effort;
+  maxEffortEl.textContent = maxEffort;
+  prestigeEl.textContent = prestige;
+}
+setInterval(()=>{
+  subs += passiveIncome;
+  updateUI();
+}, 1000);
+
+updateUI();
+
+</script>
+</body>
+</html>
