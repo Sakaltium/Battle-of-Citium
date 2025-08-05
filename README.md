@@ -11,6 +11,7 @@ https://konnitiwa768.github.io/Battle-of-Citium/Es.html
 https://konnitiwa768.github.io/Battle-of-Citium/Testk.html
 https://konnitiwa768.github.io/Battle-of-Citium/Crystal2.html
 4701
+いろきろ
 ores: ["石英石", "黄鉄鉱"], qualities: ["普通", "良質"], result: "スチール合金" },
   { ores: ["黒曜石", "龍血石"], qualities: ["極上", "伝説"], result: "白金合金" },
   { ores: ["瑠璃石", "幻影鉱"], qualities: ["神話級", "普通"], result: "サーメタル" },
